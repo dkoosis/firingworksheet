@@ -177,7 +177,6 @@ function addWorksheetRow() {
       element.value = 2; // You might want to set default values or leave them blank
       element.type = "number";
       element.min = 1;
-      element.width = "50px";
       element.addEventListener("input", calculatePrice);
     }
     cell.appendChild(element);
@@ -246,6 +245,7 @@ function addStyles() {
       border: 0px solid white; 
       background-color: #ffffff;     
       appearance: textfield; 
+      width: 50px;
       -moz-appearance: textfield; 
       text-align: right;
     }
