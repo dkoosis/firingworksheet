@@ -39,8 +39,89 @@ function createFiringWorksheet() {
   document.body.appendChild(firingWorksheet);
   firingWorksheet.style.borderCollapse = "collapse";
   addHeaders();
+  addTotalPriceRow(); // Ensure TotalPriceRow is created before adding new rows
   addWorksheetRow();
   addRowButton();
+}
+
+function addWorksheetRow() {
+    const newRow = firingWorksheet.insertRow();
+
+    // Add dropdown
+    appendFiringTypeSelector(newRow);
+
+    for (let i = 1; i < 7; i++) {
+        const td = document.createElement("td");
+        td.classList.add("worksheet-td");
+        newRow.appendChild(td);
+
+        let el;
+        if (i === 1 || i === 6) {
+            // Span elements for Unit Cost and Price
+            el = document.createElement("span");
+            el.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""));
+            if (i === 1) { // Unit Cost column
+                const formatter = new Intl.NumberFormat("en-US", {
+                    style: "currency",
+                    currency: "USD"
+                });
+                el.textContent = formatter.format(FIRING_OPTIONS["Bisque"]);
+            } else if (i === 6) { // Price column
+                el.classList.add("Price"); // Add the Price class
+            }
+        } else if (i > 1 && i < 6) {
+            // Input fields for dimensions and quantity
+            el = document.createElement("input");
+            el.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""), "worksheet-input");
+            el.value = 2; // You might want to set default values or leave them blank
+            el.type = "number";
+            el.min = 1;
+            el.width = "50px";
+            el.addEventListener("input", calculatePrice);
+        }
+        td.appendChild(el);
+    }
+
+    // Add the delete button
+    const deleteButtonTd = document.createElement("td");
+    deleteButtonTd.classList.add("worksheet-td");
+    const deleteButton = document.createElement("button");
+    deleteButton.textContent = "Delete Row";
+    deleteButton.addEventListener("click", () => {
+        firingWorksheet.deleteRow(newRow.rowIndex);
+        calculateTotalPrice(); // Recalculate total after deleting a row
+    });
+
+    deleteButtonTd.appendChild(deleteButton);
+    newRow.appendChild(deleteButtonTd);
+
+    // Trigger initial price calculation for the new row (after the row is fully created)
+    calculatePrice({ target: newRow.querySelector(".Height") });
+
+    // Ensure the Total Price row is always the last row
+    const totalPriceRow = firingWorksheet.querySelector(".TotalPriceRow");
+    if (totalPriceRow) {
+        firingWorksheet.appendChild(totalPriceRow);
+    }
+}
+function addTotalPriceRow() {
+  const totalPriceRow = firingWorksheet.insertRow();
+  totalPriceRow.classList.add("TotalPriceRow");
+  for (let i = 0; i < WORKSHEET_HEADERS.length; i++) {
+    const td = document.createElement("td");
+    td.classList.add("worksheet-td");
+    totalPriceRow.appendChild(td);
+    if (i === 4) { // Cell to the left of the Price column
+      td.textContent = "Total Price:";
+      td.style.textAlign = "right";
+    } else if (i === 5) { // Price column
+      const totalPriceSpan = document.createElement("span");
+      totalPriceSpan.classList.add("TotalPrice");
+      td.appendChild(totalPriceSpan);
+    } else {
+      td.textContent = "";
+    }
+  }
 }
 
 // Helper functions
