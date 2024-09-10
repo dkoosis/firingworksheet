@@ -50,12 +50,45 @@ function addWorksheetRow() {
   // Add dropdown
   appendFiringTypeSelector(newRow);
 
+  // Data and configuration
+  const firingWorksheet = document.createElement("table");
+  firingWorksheet.classList.add("FiringWorksheet");
+  
+  const WORKSHEET_HEADERS = [
+    "Firing Type",
+    "Unit Cost",
+    "Height",
+    "Width",
+    "Length",
+    "Quantity",
+    "Price",
+    ""
+  ];
+  
+  const FIRING_OPTIONS = {
+    Bisque: 0.03,
+    "Slipcast Bisque": 0.04,
+    "Oxidation ∆ 6": 0.03,
+    "Oxidation ∆ 10": 0.06,
+    "Reduction ∆ 10": 0.06
+  };
+  
   const currencyFormatter = new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD"    addTotalPriceRow(); // Ensure TotalPriceRow is created before adding new rows
+    currency: "USD"
+  });
+  
+  function createFiringWorksheet() {
+    addStyles();
+    document.body.appendChild(firingWorksheet);
+    firingWorksheet.style.borderCollapse = "collapse";
+    addHeaders();
+    addTotalPriceRow(); // Ensure TotalPriceRow is created before adding new rows
     addWorksheetRow();
     addRowButton();
-    }
+  }
+  
+  // ... rest of the code
     
     function addWorksheetRow() {
       const newRow = firingWorksheet.insertRow();
