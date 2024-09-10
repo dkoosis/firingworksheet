@@ -45,64 +45,100 @@ function createFiringWorksheet() {
 }
 
 function addWorksheetRow() {
-  const newRow = firingWorksheet.insertRow();
+    const newRow = firingWorksheet.insertRow();
 
-  // Add dropdown
-  appendFiringTypeSelector(newRow);
+    // Add dropdown
+    appendFiringTypeSelector(newRow);
 
-  const currencyFormatter = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD"
-  });
+    const currencyFormatter = new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD"
+    });
 
-  for (let i = 1; i < 7; i++) {
-    const cell = document.createElement("td");
-    cell.classList.add("worksheet-td");
-    newRow.appendChild(cell);
+    for (let i = 1; i < 7; i++) {
+        const cell = document.createElement("td");
+        cell.classList.add("worksheet-td");
+        newRow.appendChild(cell);
 
-    let element;
-    if (i === 1 || i === 6) {
-      // Span elements for Unit Cost and Price
-      element = document.createElement("span");
-      element.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""));
-      if (i === 1) { // Unit Cost column
-        element.textContent = currencyFormatter.format(FIRING_OPTIONS["Bisque"]);
-      } else if (i === 6) { // Price column
-        element.classList.add("Price"); // Add the Price class
-      }
-    } else if (i > 1 && i < 6) {
-      // Input fields for dimensions and quantity
-      element = document.createElement("input");
-      element.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""), "worksheet-input");
-      element.value = 2; // You might want to set default values or leave them blank
-      element.type = "number";
-      element.min = 1;
-      element.addEventListener("input", calculatePrice);
+        let element;
+        if (i === 1 || i === 6) {
+            // Span elements for Unit Cost and Price
+            element = document.createElement("span");
+            element.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""));
+            if (i === 1) { // Unit Cost column
+                element.textContent = currencyFormatter.format(FIRING_OPTIONS["Bisque"]);
+            } else if (i === 6) { // Price column
+                element.classList.add("Price"); // Add the Price class
+            }
+        } else if (i > 1 && i < 6) {
+            // Input fields for dimensions and quantity
+            element = document.createElement("input");
+            element.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""), "worksheet-input");
+            element.value = 1; 
+            element.type = "number";
+            element.min = 1;
+            // Add an event listener to each input field for validation
+            element.addEventListener("input", (event) => {
+                // Validate the input value (assuming you have a validateNumberInput function)
+                if (!validateNumberInput(event.target)) {
+                    // If invalid, display an error message
+                    displayErrorMessage(newRow, "Invalid input. Please enter an integer between 1 and 200.");
+                } else {
+                    // If valid, clear any previous error message
+                    clearErrorMessage(newRow);
+                    calculatePrice(event); // Recalculate the price
+                }
+            });
+        }
+        cell.appendChild(element);
     }
-    cell.appendChild(element);
-  }
 
-  // Add the delete button
-  const deleteButtonCell = document.createElement("td");
-  deleteButtonCell.classList.add("worksheet-td");
-  const deleteButton = document.createElement("button");
-  deleteButton.textContent = "Delete Row";
-  deleteButton.addEventListener("click", () => {
-    firingWorksheet.deleteRow(newRow.rowIndex);
-    calculateTotalPrice(); // Recalculate total after deleting a row
-  });
+    // Add the delete button
+    const deleteButtonCell = document.createElement("td");
+    deleteButtonCell.classList.add("worksheet-td");
+    const deleteButton = document.createElement("button");
+    deleteButton.textContent = "Delete Row";
+    deleteButton.addEventListener("click", () => {
+        firingWorksheet.deleteRow(newRow.rowIndex);
+        calculateTotalPrice(); // Recalculate total after deleting a row
+    });
 
-  deleteButtonCell.appendChild(deleteButton);
-  newRow.appendChild(deleteButtonCell);
+    deleteButtonCell.appendChild(deleteButton);
+    newRow.appendChild(deleteButtonCell);
 
-  // Trigger initial price calculation for the new row (after the row is fully created)
-  calculatePrice({ target: newRow.querySelector(".Height") });
+    // Add error message span (initially hidden)
+    const errorSpan = document.createElement('span');
+    errorSpan.classList.add('error-message');
+    errorSpan.style.display = 'none';
+    newRow.appendChild(errorSpan);
 
-  // Ensure the Total Price row is always the last row
-  const totalPriceRow = firingWorksheet.querySelector(".TotalPriceRow");
-  if (totalPriceRow) {
-    firingWorksheet.appendChild(totalPriceRow);
-  }
+    // Trigger initial price calculation for the new row
+    calculatePrice({ target: newRow.querySelector(".Height") });
+
+    // Ensure the Total Price row is always the last row
+    const totalPriceRow = firingWorksheet.querySelector(".TotalPriceRow");
+    if (totalPriceRow) {
+        firingWorksheet.appendChild(totalPriceRow);
+    }
+}
+
+// Helper functions for error message display
+function displayErrorMessage(row, message) {
+    const errorSpan = row.querySelector('.error-message');
+    errorSpan.textContent = message;
+    errorSpan.style.display = 'inline-block'; // Or 'block' depending on your layout
+}
+
+function clearErrorMessage(row) {
+    const errorSpan = row.querySelector('.error-message');
+    errorSpan.textContent = '';
+    errorSpan.style.display = 'none';
+}
+
+// Assuming you have the validateNumberInput function defined elsewhere
+function validateNumberInput(inputElement) {
+    const value = parseInt(inputElement.value);
+    return !isNaN(value) && value >= 1 && value <= 200; 
 }
 function addTotalPriceRow() {
   const totalPriceRow = firingWorksheet.insertRow();
