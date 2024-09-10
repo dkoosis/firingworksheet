@@ -257,7 +257,7 @@ function addStyles() {
   `;
   document.head.appendChild(styleElement);
 }
-
+// Helper functions
 function addHeaders() {
   const headerRow = firingWorksheet.insertRow();
   WORKSHEET_HEADERS.forEach((headerName) => {
