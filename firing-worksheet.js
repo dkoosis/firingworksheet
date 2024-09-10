@@ -52,7 +52,75 @@ function addWorksheetRow() {
 
   const currencyFormatter = new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD"
+    currency: "USD"    addTotalPriceRow(); // Ensure TotalPriceRow is created before adding new rows
+    addWorksheetRow();
+    addRowButton();
+    }
+    
+    function addWorksheetRow() {
+      const newRow = firingWorksheet.insertRow();
+    
+      // Add dropdown
+      appendFiringTypeSelector(newRow);
+    
+      const currencyFormatter = new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD"
+      });
+    
+      const UNIT_COST_INDEX = 1;
+      const PRICE_INDEX = 6;
+    
+      for (let i = 1; i < 7; i++) {
+        const cell = document.createElement("td");
+        cell.classList.add("worksheet-td");
+        newRow.appendChild(cell);
+    
+        let element;
+        if (i === UNIT_COST_INDEX || i === PRICE_INDEX) {
+          // Span elements for Unit Cost and Price
+          element = document.createElement("span");
+          element.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""));
+          if (i === UNIT_COST_INDEX) { // Unit Cost column
+            element.textContent = currencyFormatter.format(FIRING_OPTIONS["Bisque"]);
+          } else if (i === PRICE_INDEX) { // Price column
+            element.classList.add("Price"); // Add the Price class
+          }
+        } else if (i > UNIT_COST_INDEX && i < PRICE_INDEX) {
+          // Input fields for dimensions and quantity
+          element = document.createElement("input");
+          element.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""), "worksheet-input");
+          element.value = 2; // You might want to set default values or leave them blank
+          element.type = "number";
+          element.min = 1;
+          element.width = "50px";
+          element.addEventListener("input", calculatePrice);
+        }
+        cell.appendChild(element);
+      }
+    
+      // Add the delete button
+      const deleteButtonCell = document.createElement("td");
+      deleteButtonCell.classList.add("worksheet-td");
+      const deleteButton = document.createElement("button");
+      deleteButton.textContent = "Delete Row";
+      deleteButton.addEventListener("click", () => {
+        firingWorksheet.deleteRow(newRow.rowIndex);
+        calculateTotalPrice(); // Recalculate total after deleting a row
+      });
+    
+      deleteButtonCell.appendChild(deleteButton);
+      newRow.appendChild(deleteButtonCell);
+    
+      // Trigger initial price calculation for the new row (after the row is fully created)
+      calculatePrice({ target: newRow.querySelector(".Height") });
+    
+      // Ensure the Total Price row is always the last row
+      const totalPriceRow = firingWorksheet.querySelector(".TotalPriceRow");
+      if (totalPriceRow) {
+        firingWorksheet.appendChild(totalPriceRow);
+      }
+    }
   });
 
   for (let i = 1; i < 7; i++) {
