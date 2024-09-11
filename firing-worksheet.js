@@ -13,6 +13,8 @@
 // Data and configuration
 const firingWorksheet = document.createElement("table");
 firingWorksheet.classList.add("FiringWorksheet");
+const UNIT_COST_COLUMN = 1;
+const PRICE_COLUMN = 6;
 
 const WORKSHEET_HEADERS = [
   "Firing Type",
@@ -22,7 +24,8 @@ const WORKSHEET_HEADERS = [
   "Length",
   "Quantity",
   "Price",
-  ""
+  ""//,
+ // "Err"
 ];
 
 const FIRING_OPTIONS = {
@@ -43,103 +46,130 @@ function createFiringWorksheet() {
   addWorksheetRow();
   addRowButton();
 }
-
 function addWorksheetRow() {
-    const newRow = firingWorksheet.insertRow();
+  const newRow = firingWorksheet.insertRow();
 
-    // Add dropdown
-    appendFiringTypeSelector(newRow);
+  // Add dropdown
+  appendFiringTypeSelector(newRow);
 
-    const currencyFormatter = new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD"
-    });
+  const currencyFormatter = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD"
+  });
 
-    for (let i = 1; i < 7; i++) {
-        const cell = document.createElement("td");
-        cell.classList.add("worksheet-td");
-        newRow.appendChild(cell);
+  for (let i = UNIT_COST_COLUMN; i < 7; i++) {
+    const cell = document.createElement("td");
+    cell.classList.add("worksheet-td");
+    newRow.appendChild(cell);
 
-        let element;
-        if (i === 1 || i === 6) {
-            // Span elements for Unit Cost and Price
-            element = document.createElement("span");
-            element.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""));
-            if (i === 1) { // Unit Cost column
-                element.textContent = currencyFormatter.format(FIRING_OPTIONS["Bisque"]);
-            } else if (i === 6) { // Price column
-                element.classList.add("Price"); // Add the Price class
-            }
-        } else if (i > 1 && i < 6) {
-            // Input fields for dimensions and quantity
-            element = document.createElement("input");
-            element.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""), "worksheet-input");
-            element.value = 1; 
-            element.type = "number";
-            element.min = 1;
-            // Add an event listener to each input field for validation
-            element.addEventListener("input", (event) => {
-                // Validate the input value (assuming you have a validateNumberInput function)
-                if (!validateNumberInput(event.target)) {
-                    // If invalid, display an error message
-                    displayErrorMessage(newRow, "Invalid input. Please enter an integer between 1 and 200.");
-                } else {
-                    // If valid, clear any previous error message
-                    clearErrorMessage(newRow);
-                    calculatePrice(event); // Recalculate the price
-                }
-            });
-        }
-        cell.appendChild(element);
+    let element;
+    if (i === UNIT_COST_COLUMN || i === PRICE_COLUMN) {
+      // Span elements for Unit Cost and Price
+      element = document.createElement("span");
+      element.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""));
+      if (i === UNIT_COST_COLUMN) {
+        // Unit Cost column
+        element.textContent = currencyFormatter.format(
+          FIRING_OPTIONS["Bisque"]
+        );
+      } else if (i === PRICE_COLUMN) {
+        // Price column
+        element.classList.add("Price"); // Add the Price class
+      }
+    } else if (i > UNIT_COST_COLUMN && i < PRICE_COLUMN) {
+      // Input fields for dimensions and quantity
+      element = document.createElement("input");
+      element.classList.add(
+        WORKSHEET_HEADERS[i].replace(/\s/g, ""),
+        "worksheet-input"
+      );
+      element.value = 1; // Default value
+      element.type = "number";
+      element.min = 1;
+      element.width = "50px"; //dk!
+
+      // Add an event listener to each input field for validation and price calculation
+      // dk! element.addEventListener("input", handleInput);
     }
+    cell.appendChild(element);
+  }
 
-    // Add the delete button
-    const deleteButtonCell = document.createElement("td");
-    deleteButtonCell.classList.add("worksheet-td");
-    const deleteButton = document.createElement("button");
-    deleteButton.textContent = "Delete Row";
-    deleteButton.addEventListener("click", () => {
-        firingWorksheet.deleteRow(newRow.rowIndex);
-        calculateTotalPrice(); // Recalculate total after deleting a row
-    });
+  // Add the delete button
+  const deleteButtonCell = createDeleteButton(newRow);
+  newRow.appendChild(deleteButtonCell);
 
-    deleteButtonCell.appendChild(deleteButton);
-    newRow.appendChild(deleteButtonCell);
+  // Add error message span (initially hidden)
+  /*dk
+  const errorSpan = document.createElement("span");
+  errorSpan.classList.add("error-message");
+  //errorSpan.style.display = "none";
+  newRow.appendChild(errorSpan);
+*/
+  // Trigger initial price calculation for the new row
+  calculatePrice({ target: newRow.querySelector(".Height") });
 
-    // Add error message span (initially hidden)
-    const errorSpan = document.createElement('span');
-    errorSpan.classList.add('error-message');
-    errorSpan.style.display = 'none';
-    newRow.appendChild(errorSpan);
-
-    // Trigger initial price calculation for the new row
-    calculatePrice({ target: newRow.querySelector(".Height") });
-
-    // Ensure the Total Price row is always the last row
-    const totalPriceRow = firingWorksheet.querySelector(".TotalPriceRow");
-    if (totalPriceRow) {
-        firingWorksheet.appendChild(totalPriceRow);
-    }
+  // Ensure the Total Price row is always the last row
+  ensureTotalPriceRowIsLast();
 }
 
 // Helper functions for error message display
+/**
+ * Handles input events on dimension and quantity fields, performing validation and price calculation.
+ * @param {Event} event - The input event.
+ */
+
+function handleInput(event) {
+  console.log(event.type)
+  const row = event.target.closest("tr");
+  // Validate the input value
+  if (!validateNumberInput(event.target)) {
+    displayErrorMessage(row, "Invalid input. Please enter an integer between 1 and 200.");
+  } else {
+    clearErrorMessage(row);
+    calculatePrice(event);
+  }
+}
+
 function displayErrorMessage(row, message) {
-    const errorSpan = row.querySelector('.error-message');
-    errorSpan.textContent = message;
-    errorSpan.style.display = 'inline-block'; // Or 'block' depending on your layout
+  console.log("displayerror")
+  const errorSpan = row.querySelector(".error-message");
+  errorSpan.textContent = message;
+  errorSpan.style.display = "inline-block";
 }
 
 function clearErrorMessage(row) {
-    const errorSpan = row.querySelector('.error-message');
-    errorSpan.textContent = '';
-    errorSpan.style.display = 'none';
+  const errorSpan = row.querySelector(".error-message");
+  errorSpan.textContent = "";
+  errorSpan.style.display = "none";
 }
 
-// Assuming you have the validateNumberInput function defined elsewhere
 function validateNumberInput(inputElement) {
-    const value = parseInt(inputElement.value);
-    return !isNaN(value) && value >= 1 && value <= 200; 
+  console.log("validate")
+  const value = parseInt(inputElement.value);
+  return !isNaN(value) && value >= 1 && value <= 200;
 }
+
+function createDeleteButton(row) {
+  const deleteButtonTd = document.createElement("td");
+  deleteButtonTd.classList.add("worksheet-td");
+  const deleteButton = document.createElement("button");
+  deleteButton.textContent = "Delete Row";
+  deleteButton.addEventListener("click", () => {
+    firingWorksheet.deleteRow(row.rowIndex);
+    calculateTotalPrice(); // Recalculate total after deleting a row
+  });
+
+  deleteButtonTd.appendChild(deleteButton);
+  return deleteButtonTd;
+}
+
+function ensureTotalPriceRowIsLast() {
+  const totalPriceRow = firingWorksheet.querySelector(".TotalPriceRow");
+  if (totalPriceRow) {
+    firingWorksheet.appendChild(totalPriceRow);
+  }
+}
+
 function addTotalPriceRow() {
   const totalPriceRow = firingWorksheet.insertRow();
   totalPriceRow.classList.add("TotalPriceRow");
@@ -147,10 +177,12 @@ function addTotalPriceRow() {
     const td = document.createElement("td");
     td.classList.add("worksheet-td");
     totalPriceRow.appendChild(td);
-    if (i === 4) { // Cell to the left of the Price column
+    if (i === 4) {
+      // Cell to the left of the Price column
       td.textContent = "Total Price:";
       td.style.textAlign = "right";
-    } else if (i === 5) { // Price column
+    } else if (i === 5) {
+      // Price column
       const totalPriceSpan = document.createElement("span");
       totalPriceSpan.classList.add("TotalPrice");
       td.appendChild(totalPriceSpan);
@@ -172,7 +204,7 @@ function addStyles() {
 
     .worksheet-td {
       border: 1px solid black; 
-      padding: 5px;
+      padding: 3px;
       text-align: right; 
       background-color: #ffffff;
     }
@@ -184,13 +216,14 @@ function addStyles() {
       appearance: textfield; 
       -moz-appearance: textfield; 
       text-align: right;
+      padding: 1px;
     }
 
     .FiringType {
       border: 1px solid white;
     }
     
-     .error-message {
+    .error-message {
     color: red;
     font-size: 12px;
     margin-left: 5px;
@@ -230,19 +263,24 @@ function addWorksheetRow() {
       // Span elements for Unit Cost and Price
       el = document.createElement("span");
       el.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""));
-      if (i === 1) { // Unit Cost column
+      if (i === 1) {
+        // Unit Cost column
         const formatter = new Intl.NumberFormat("en-US", {
           style: "currency",
           currency: "USD"
         });
         el.textContent = formatter.format(FIRING_OPTIONS["Bisque"]);
-      } else if (i === 6) { // Price column
+      } else if (i === 6) {
+        // Price column
         el.classList.add("Price"); // Add the Price class
       }
     } else if (i > 1 && i < 6) {
       // Input fields for dimensions and quantity
       el = document.createElement("input");
-      el.classList.add(WORKSHEET_HEADERS[i].replace(/\s/g, ""), "worksheet-input");
+      el.classList.add(
+        WORKSHEET_HEADERS[i].replace(/\s/g, ""),
+        "worksheet-input"
+      );
       el.value = 2; // You might want to set default values or leave them blank
       el.type = "number";
       el.min = 1;
@@ -299,7 +337,9 @@ function appendFiringTypeSelector(newRow) {
       style: "currency",
       currency: "USD"
     });
-    row.querySelector(".UnitCost").textContent = formatter.format(selectedFiringOptionCost);
+    row.querySelector(".UnitCost").textContent = formatter.format(
+      selectedFiringOptionCost
+    );
   });
 
   const td = document.createElement("td");
@@ -312,14 +352,26 @@ function appendFiringTypeSelector(newRow) {
 // Event handlers and callbacks
 function calculatePrice(event) {
   const row = event.target.closest("tr");
-
+  console.log(`calculatePrice: ${event.type}` )
+  if (event.type == "input") {
+    console.log(validateNumberInput(event.target))
+  }
+  //xxx
   // Get values from the row
-  const selectedFiringOptionCost = parseFloat(row.querySelector(".FiringType").value);
+  const selectedFiringOptionCost = parseFloat(
+    row.querySelector(".FiringType").value
+  );
   const height = parseFloat(row.querySelector(".Height").value) || 0;
   const width = parseFloat(row.querySelector(".Width").value) || 0;
   const length = parseFloat(row.querySelector(".Length").value) || 0;
   const quantity = parseFloat(row.querySelector(".Quantity").value) || 0;
 
+  // test dk!
+  const errorSpan = row.querySelector(".error-message");
+  //errorSpan.textContent = message;
+  //errorSpan.style.display = "inline-block";
+  
+  
   // Calculate the price
   const volume = height * width * length;
   const totalPrice = selectedFiringOptionCost * volume * quantity;
@@ -331,6 +383,8 @@ function calculatePrice(event) {
   });
   row.querySelector(".Price").textContent = formatter.format(totalPrice);
   calculateTotalPrice(); // Recalculate and update the grand total
+  console.log(`${totalPrice}` )
+
 }
 
 function calculateTotalPrice() {
@@ -352,7 +406,9 @@ function calculateTotalPrice() {
 
   const totalPriceRow = firingWorksheet.querySelector(".TotalPriceRow");
   if (totalPriceRow) {
-    totalPriceRow.querySelector(".TotalPrice").textContent = formatter.format(totalPrice);
+    totalPriceRow.querySelector(".TotalPrice").textContent = formatter.format(
+      totalPrice
+    );
   }
 }
 
