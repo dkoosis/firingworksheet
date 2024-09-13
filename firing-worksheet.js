@@ -92,6 +92,10 @@ function addStyles() {
       border: 1px solid #dddddd;
       text-align: center;
     }    
+    .fws-input-error {
+       border-color: red; /* Change border color to red */
+      background-color: #ffdddd;
+    }
   }
   `;
   document.head.appendChild(styleElement);
@@ -235,6 +239,7 @@ function ensureTotalPriceRowIsLast() {
 }
 
 function recalculate(event) {
+  console.log("recalc");
   if (!event.type) {
     calculateTotalPrice();
     return;
@@ -247,29 +252,26 @@ function recalculate(event) {
   let height = parseInt(row.querySelector(".fws-height").value);
   let quantity = parseInt(row.querySelector(".fws-quantity").value);
 
-  // Input Validation - Ensure positive integers and valid unit cost
-  if (isNaN(length) || length < 1 ||
-    isNaN(width) || width < 1 ||
-    isNaN(height) || height < 1 ||
-    isNaN(quantity) || quantity < 1) {
-    displayErrorMessage("Invalid dimensions or quantity. Please use positive whole numbers.");
+  // Input Validation - Ensure positive integers within limits and valid unit cost
+  if (
+    isNaN(length) || length < 1 || length > 120 ||
+    isNaN(width) || width < 1 || width > 120 ||
+    isNaN(height) || height < 1 || height > 120 ||
+    isNaN(quantity) || quantity < 1 || quantity > 100
+  ) {
+    displayErrorMessage(event, "Invalid dimensions or quantity. Please use positive whole numbers within the allowed limits.");
     return;
   }
 
   if (unitCost <= 0 || unitCost >= 5) {
-    displayErrorMessage("Invalid unit cost. Please enter a value between 0 and 5.");
-    return;
-  }
-
-  if (quantity < 1 || quantity >= 100) {
-    displayErrorMessage("Quantity must be between 1 and 100.");
+    displayErrorMessage(event, "Invalid unit cost. Please enter a value between 0 and 5.");
     return;
   }
 
   const volume = length * width * height;
 
   if (volume < 1 || volume >= 1000000) {
-    displayErrorMessage("Volume out of range. Please adjust dimensions.");
+    displayErrorMessage(event, "Volume out of range. Please adjust dimensions.");
     return;
   }
 
@@ -285,10 +287,19 @@ function recalculate(event) {
   calculateTotalPrice();
 }
 
-function displayErrorMessage(message) {
+function displayErrorMessage(event, message) {
   const errorSpan = document.querySelector(".fws-error-message .error-text");
   if (errorSpan) {
     errorSpan.textContent = message;
+
+    // Highlight the input fields that triggered the error
+    const row = event.target.closest("tr");
+    const inputFields = row.querySelectorAll(".fws-input");
+    inputFields.forEach(field => field.classList.add("fws-input-error"));
+  }
+  const addButton = document.querySelector(".fws-addbutton"); 
+  if (addButton) {
+    addButton.disabled = true;
   }
 }
 
@@ -296,6 +307,15 @@ function clearErrorMessage() {
   const errorSpan = document.querySelector(".fws-error-message .error-text");
   if (errorSpan) {
     errorSpan.textContent = "";
+
+    // Remove error highlighting from all input fields
+    const inputFields = document.querySelectorAll(".fws-input");
+    inputFields.forEach(field => field.classList.remove("fws-input-error"));
+  }
+  const addButton = document.querySelector(".fws-addbutton"); 
+  if (addButton) {
+    console.log('enable button')
+    addButton.disabled = false;
   }
 }
 
@@ -322,6 +342,7 @@ function calculateTotalPrice() {
 function addRowButton() {
   const addButton = document.createElement("button");
   addButton.textContent = "Add Row";
+  addButton.classList.add("fws-addbutton")
   addButton.addEventListener("click", addWorksheetRow);
   document.body.appendChild(addButton);
 }
