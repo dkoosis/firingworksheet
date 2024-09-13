@@ -226,6 +226,13 @@ function createDeleteButton(row) {
   deleteButton.addEventListener("click", () => {
     firingWorksheet.deleteRow(row.rowIndex);
     calculateTotalPrice();
+
+    // Check if any input fields have errors after deleting the row
+    const inputFieldsWithError = document.querySelectorAll(".fws-input-error");
+    if (inputFieldsWithError.length === 0) {
+      // If no errors remain, clear the error message
+      clearErrorMessage();
+    }
   });
   deleteButtonTd.appendChild(deleteButton);
   return deleteButtonTd;
