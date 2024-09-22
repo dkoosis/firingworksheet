@@ -53,14 +53,22 @@ class CeramicsFiringCalculator extends HTMLElement {
           border-collapse: collapse;
         }
 
-        th, td {
+        td {
           border: 1px solid #ddd;
           padding: 8px;
-          text-align: left;
+          text-align: right;
         }
 
+        input, select {
+          text-align: right;
+          border: 0px;
+        }
+        
         th {
+          border: 1px solid #ddd;
+          padding: 8px;
           background-color: #f0f0f0;
+          text-align: center;
         }
 
         td[data-error]::after {
@@ -189,8 +197,10 @@ class CeramicsFiringCalculator extends HTMLElement {
     row.appendChild(firingTypeCell);
 
     // Unit Cost cell
-    const unitCostCell = document.createElement("td");
-    unitCostCell.textContent = "$0.00";
+    const unitCostCell = document.createElement('td');
+    const defaultFiringType = firingTypeSelect.value; // Get the default selected firing type
+    const unitCost = this.FIRING_OPTIONS[defaultFiringType] || 0;
+    unitCostCell.textContent = this.USDformatter.format(unitCost);
     row.appendChild(unitCostCell);
 
     // Dimension input cells (height, width, length)
@@ -200,6 +210,9 @@ class CeramicsFiringCalculator extends HTMLElement {
       input.type = "number";
       input.min = 1;
       input.max = 120;
+      input.value = 1;
+      input.border = 0;
+      input.align = "right";
       cell.appendChild(input);
       return cell;
     });
@@ -207,7 +220,7 @@ class CeramicsFiringCalculator extends HTMLElement {
 
     // Volume cell
     const volumeCell = document.createElement("td");
-    volumeCell.textContent = "0";
+    volumeCell.textContent = 1; // Initial volume calculation with default dimensions (1 x 1 x 1)
     row.appendChild(volumeCell);
 
     // Quantity cell
@@ -216,6 +229,7 @@ class CeramicsFiringCalculator extends HTMLElement {
     quantityInput.type = "number";
     quantityInput.min = 1;
     quantityInput.max = 120;
+    quantityInput.value = 1;
     quantityCell.appendChild(quantityInput);
     row.appendChild(quantityCell);
 
@@ -230,6 +244,9 @@ class CeramicsFiringCalculator extends HTMLElement {
     deleteButton.textContent = "Delete";
     deleteButtonCell.appendChild(deleteButton);
     row.appendChild(deleteButtonCell);
+
+    // Calculate initial price based on default values
+    this.calculateRowValues(row); // Call calculateRowValues after the row is fully created
 
     return row;
   }
@@ -246,6 +263,10 @@ class CeramicsFiringCalculator extends HTMLElement {
 
     row.cells[5].textContent = volume; // Update volume cell
     row.cells[7].textContent = this.USDformatter.format(price); // Update price cell
+
+    // Update total cost after calculating row values
+    this.updateTotalCost();
+
   }
 
   updateTotalCost() {
