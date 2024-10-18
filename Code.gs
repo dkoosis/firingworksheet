@@ -255,29 +255,40 @@ function getDepartment(e) {
  */
 function getDepartments(e) {
   Logger.log(arguments.callee.name); // DEBUG
-  const includePastEmployees = e.parameter.includePastEmployees || 'false'; // Default to 'false' if not provided
+  const includePastEmployees = e.parameter.includePastEmployees === 'true'; // Improve comparison
 
   // Calculate department statistics, considering includePastEmployees
   const departmentData = Array.from(departments.values());
-  for (const department of departmentData) {
-    let departmentHeadcount = 0;
-    for (const employee of employeeData.values()) {
-      if (employee.profiles_category_200009617 === department.id && (includePastEmployees === 'true' || !employee.profiles_departure_date)) {
-        departmentHeadcount++;
+  const departmentHeadcountMap = new Map();
+
+  // Calculate headcount for each department
+  for (const employee of employeeData.values()) {
+    if (includePastEmployees || !employee.profiles_departure_date) {
+      const deptId = employee.profiles_category_200009617;
+      if (departmentData.find(dept => dept.id === deptId)) {
+        // Increment headcount in the map
+        departmentHeadcountMap.set(deptId, (departmentHeadcountMap.get(deptId) || 0) + 1);
       }
     }
-    department.departmentHeadcount = departmentHeadcount; // Update the headcount in the department object
+  }
+
+  // Update departments with calculated headcounts
+  for (const department of departmentData) {
+    department.departmentHeadcount = departmentHeadcountMap.get(department.id) || 0;
   }
 
   // Filter out departments with zero current employees if includePastEmployees is not true
-  const filteredDepartments = includePastEmployees === 'true'
-    ? departmentData
-    : departmentData.filter(department => department.departmentHeadcount > 0);
+  const filteredDepartments = includePastEmployees 
+    ? departmentData 
+    : departmentData.filter(department => department.departmentHeadcount > 0)
+                    .filter(department => department != null); // Ensure no null departments
 
-  // Sort departments alphabetically by name
-  filteredDepartments.sort((a, b) => a.name.localeCompare(b.name));
+  // Sort departments alphabetically by name while ensuring valid entries
+  const validDepartments = filteredDepartments.filter(department => department && department.name);
+  validDepartments.sort((a, b) => a.name.localeCompare(b.name));
 
-  const departmentsResponse = filteredDepartments.map(department => ({
+  // Map to response format
+  const departmentsResponse = validDepartments.map(department => ({
     id: department.id,
     name: department.name,
     departmentHeadcount: department.departmentHeadcount,
@@ -286,7 +297,7 @@ function getDepartments(e) {
 
   // Improved error handling (if no departments are found)
   if (departmentsResponse.length === 0) {
-    const errorMessage = includePastEmployees === 'true'
+    const errorMessage = includePastEmployees 
       ? "No departments found."
       : "No departments found with active employees.";
     Logger.log(`Error in getDepartments: ${errorMessage}`);
