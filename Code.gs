@@ -1,4 +1,3 @@
-timeStamp = new Date();
 let employeeData = new Map();
 let departments = new Map();
 
@@ -11,7 +10,7 @@ function loadData() {
   try {
     PropertiesService.getScriptProperties().setProperty('lastRefresh', new Date().toString());
 
-    const jsonString = NamelyReport.fetcher("3daf4b1b-41af-4c10-886c-82d0facfaf0c");
+    const jsonString = NamelyReport.fetcher(NAMELY_REPORT_ID);
     const jsonData = JSON.parse(jsonString);
 
     const report = jsonData.reports[0];
@@ -24,11 +23,6 @@ function loadData() {
         const columnName = columns[i].name;
         employee[columnName] = row[i];
       }
-
-      // Calculate and store derived attributes
-      const MS_PER_DAY = 1000 * 60 * 60 * 24;
-      const DAYS_PER_MONTH = 30.44; // Average number of days in a month
-      const DAYS_PER_YEAR = 365.25; // Average number of days in a year
 
       const startDate = new Date(employee.profiles_start_date);
       const endDate = employee.profiles_departure_date ? new Date(employee.profiles_departure_date) : new Date();
@@ -193,7 +187,7 @@ function getEmployees(e) {
       const startDate = new Date(employee.profiles_start_date);
       const now = new Date();
       const timeDiff = now.getTime() - startDate.getTime();
-      const diffInDays = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+      const diffInDays = Math.floor(timeDiff / MS_PER_DAY);
       if (diffInDays > 7) {
         return false;
       }
@@ -435,6 +429,8 @@ function runTests() {
     loadData();
   }
 
+  let tokTest = decodeGCPToken(testToken);
+
   // Test case for getDepartments()
   const e = { parameter: { includePastEmployees: 'false' } }; // Simulate a request with includePastEmployees=false
   const response = getDepartments(e);
@@ -455,6 +451,68 @@ function runTests() {
   Logger.log("  Expected: " + JSON.stringify(expectedResponse));
   assert(JSON.stringify(response) === JSON.stringify(expectedResponse), "getDepartments() test failed");
 }
+
+/**
+ * Decodes a GCP token by attempting to:
+ * 1. Base64 decode it (if it's a JWT-like token).
+ * 2. Query Google's OAuth2 token info endpoint.
+ * @param {string} token The GCP token.
+ * @return {object} Decoded information or error message.
+ */
+function decodeGCPToken(token) {
+  try {
+      // If it's not a JWT, fall back to Google's tokeninfo endpoint
+      return fetchTokenInfo(token);
+  } catch (error) {
+    return {
+      method: "Error",
+      message: error.message
+    };
+  }
+}
+
+/**
+ * Base64-url decoding helper function.
+ * @param {string} str Base64-url encoded string.
+ * @return {string} Decoded string.
+ */
+function decodeBase64Url(str) {
+  // Replace URL-safe characters, and add padding if needed
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  var padding = str.length % 4 ? '==='.slice(str.length % 4) : '';
+  var decoded = Utilities.base64Decode(str + padding);
+  return Utilities.newBlob(decoded).getDataAsString();
+}
+
+/**
+ * Fetch token information using Google's OAuth 2.0 Token Info endpoint.
+ * @param {string} token The GCP token.
+ * @return {object} Token information or error message.
+ */
+function fetchTokenInfo(token) {
+  var url = 'https://oauth2.googleapis.com/tokeninfo?access_token=' + token;
+  try {
+    var response = UrlFetchApp.fetch(url);
+    var result = JSON.parse(response.getContentText());
+    return {
+      method: "OAuth2 tokeninfo endpoint",
+      tokenInfo: result
+    };
+  } catch (error) {
+    return {
+      method: "Error",
+      message: "Failed to fetch token info: " + error.message
+    };
+  }
+}
+
+// Example usage
+function testDecode() {
+  var token = "ya29.c.c0ASRK0GZaOm-VAhWI4TQyKDFDHUHlaPPj3vx3BB8HDc5Ej0hJmm1YZbVCUIesvxjZJPTPCYuuLGO8r5I0PfRs5kFdmlaRaXS10cKso1gShzetRHa37cfiaEvsigF6fZTyFq1YOYrslQ3wE6KF6N14MkULRc-6jiFseD6LjmSuPD1iksz3T68tuJJxyqUCPT9vb0eMEp4NJWETpJGWCn1qgVI3pxXABOOWJFJXRLdFSIDeOO-YANH86XqvIaiQY8IlA3iktkWW27IEYzd8t_oRnmIL1-UT0YgZiMSdBvzA4y7QEw4AUiSNjs4rYRMMySL5y8ox5EAQrMU5LFU6hfqWTdzVzrfecaE55boehtvKeDZvqPLeOVaX-bdQJXHLN389K38Ba0j9ttZF7oJFZYb5mImibwyYijVhqVuWIqsvfnnJQk0Y8f0FU0htdMpYf7UX7UXiI-tirOvcXy-41Ibx0s-uhpW95B1ndMgBrSZyW4Xx1yIaYRpBZ5rMWFIjf1boiJi4vlijieOnvn1vgzmdvj-nofJfe0Yliv-eQ0wvZ4b_7zXrvgccOk_sghuVhWZsatd6Itevb9wogb5bSbSXS3uJnrBUXtpub3-J57V0UtYc4s3O8kX9Jct59kb3J7QOnio0_ewn0IVmpyfk4SR6y2qwn282J_Xuj-51tFwynUj5gsbl3f1kJzfY4m9_nk8he8ascwa4RZY18npeBcnVxjJQyXuF8qRM159o6ixF5VyOMWdyovvc9nQr44xg4410gaX9Sj66zv9JW4vFpO-2bpxZ270RjSdZWJrlffVYwFq0a7kiSnxb_2_tZ178uIYQoJ1V67Bzla6X9wbt4y7gv0R-u0z2rVombimM97znaJdlcM4qy4O_IeeVQdXjU_4jFhX32i8Rn-fU0O8tc90vIo6hfp3U5f4mFQBqXteyXxbs6w_i3XgVMgUFUrd9oyVjFrJ5WsvaQkgsvt4hjpmpWUseafc2U92fj9r1sy4vnmdxxWYihJbB0aB";
+  var decoded = fetchTokenInfo(token);
+  Logger.log(decoded);
+}
+
 
 function assert(condition, message) {
   if (!condition) {
