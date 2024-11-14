@@ -9,8 +9,166 @@
  *
  * Multiple line items can be added, and the total cost is calculated accordingly.
  * 
- * dk!
  */
+import { Permissions, webMethod } from "wix-web-module";
+import { currentCart, cart } from "wix-ecom-backend";
+import { elevate } from "wix-auth";
+
+const APP_ID = "97ed05e3-04ed-4095-af45-90587bfed9f0";
+const ITEM_TYPE_PRESET = "PHYSICAL";
+
+// Configuration constants for validation
+const VALIDATION = {
+    MAX_QUANTITY: 999, // Maximum allowed quantity per item
+    MIN_QUANTITY: 1,   // Minimum allowed quantity
+    MAX_PRICE: 1500.99, // Maximum allowed price
+    MIN_PRICE: 0.01,     // Minimum allowed price
+    MAX_TOTAL_ITEMS: 99 // Maximum total items in cart
+};
+
+/**
+ * Validates a single worksheet item
+ * @param {Object} item - The worksheet item to validate
+ * @throws {Error} If validation fails
+ */
+function validateWorksheetItem(item) {
+    // Check for required fields
+    if (!item || typeof item !== 'object') {
+        throw new Error('Invalid worksheet item format');
+    }
+
+    // Validate quantity
+    const quantity = Number(item.quantity);
+    if (
+        isNaN(quantity) ||
+        !Number.isInteger(quantity) ||
+        quantity < VALIDATION.MIN_QUANTITY ||
+        quantity > VALIDATION.MAX_QUANTITY
+    ) {
+        throw new Error(
+            `Invalid quantity: ${item.quantity}. Must be between ${VALIDATION.MIN_QUANTITY} and ${VALIDATION.MAX_QUANTITY}`
+        );
+    }
+
+    // Validate price
+    const price = Number(item.price);
+    if (
+        isNaN(price) ||
+        price < VALIDATION.MIN_PRICE ||
+        price > VALIDATION.MAX_PRICE
+    ) {
+        throw new Error(
+            `Invalid price: ${item.price}. Must be between ${VALIDATION.MIN_PRICE} and ${VALIDATION.MAX_PRICE}`
+        );
+    }
+
+    // Validate dimensions if present
+    ['height', 'width', 'length'].forEach(dim => {
+        if (item[dim] !== undefined) {
+            const value = Number(item[dim]);
+            if (isNaN(value) || value <= 0) {
+                throw new Error(`Invalid ${dim}: ${item[dim]}. Must be a positive number`);
+            }
+        }
+    });
+}
+
+/**
+ * Validates the entire worksheet dataset
+ * @param {Array} worksheetData - Array of worksheet items
+ * @throws {Error} If validation fails
+ */
+function validateWorksheetData(worksheetData) {
+    if (!Array.isArray(worksheetData)) {
+        throw new Error("worksheetData must be an array");
+    }
+
+    if (worksheetData.length === 0) {
+        throw new Error("worksheetData cannot be empty");
+    }
+
+    // Calculate total items
+    const totalItems = worksheetData.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    if (totalItems > VALIDATION.MAX_TOTAL_ITEMS) {
+        throw new Error(`Total quantity (${totalItems}) exceeds maximum allowed (${VALIDATION.MAX_TOTAL_ITEMS})`);
+    }
+
+    // Validate each item
+    worksheetData.forEach((item, index) => {
+        try {
+            validateWorksheetItem(item);
+        } catch (error) {
+            throw new Error(`Item ${index + 1}: ${error.message}`);
+        }
+    });
+}
+
+/**
+ * Adds worksheet items to the cart
+ * @param {Array} worksheetData - Array of worksheet items to add
+ * @returns {Promise<Object>} Updated cart
+ * @throws {Error} If adding items fails
+ */
+export const addWorksheetToCart = webMethod(
+    Permissions.Anyone,
+    async (worksheetData) => {
+        try {
+            // Validate all worksheet data before processing
+            validateWorksheetData(worksheetData);
+            
+            // Check if adding these items would exceed cart limits
+            const existingCart = await getElevatedCart();
+            if (existingCart) {
+                const existingQuantity = existingCart.lineItems?.reduce(
+                    (sum, item) => sum + (item.quantity || 0),
+                    0
+                ) || 0;
+                const newQuantity = worksheetData.reduce(
+                    (sum, item) => sum + Number(item.quantity || 0),
+                    0
+                );
+                
+                if (existingQuantity + newQuantity > VALIDATION.MAX_TOTAL_ITEMS) {
+                    throw new Error(
+                        `Adding these items would exceed the maximum cart quantity of ${VALIDATION.MAX_TOTAL_ITEMS}`
+                    );
+                }
+            }
+
+            return await generateCustomLineItemsFromWorksheet(worksheetData);
+        } catch (error) {
+            console.error("Error while adding worksheet to cart:", error);
+            throw new Error(`Failed to add worksheet to cart: ${error.message}`);
+        }
+    }
+);
+
+function createCartItemData(item) {
+    // Parse and format numbers for consistency
+    const price = Number(item.price).toFixed(2);
+    return {
+        itemType: { preset: ITEM_TYPE_PRESET },
+        price,
+        priceDescription: { original: price },
+        descriptionLines: [{
+            name: { original: item.firingType },
+            plainText: { original: item.firingType },
+        }],
+        productName: { original: item.firingType },
+        catalogReference: {
+            appId: APP_ID,
+            catalogItemId: item._id,
+            options: {
+                Type: item.firingType,
+                Height: item.height?.toString() || "",
+                Width: item.width?.toString() || "",
+                Length: item.length?.toString() || "",
+            },
+        },
+        quantity: Number(item.quantity),
+    };
+}
+
 class CeramicsFiringCalculator extends HTMLElement {
     constructor() {
         super();
