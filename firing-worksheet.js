@@ -1,352 +1,11 @@
-// /*
-//  * This program generates a worksheet for calculating the cost of firing ceramics at a studio.
-//  * Customers input the firing type, piece dimensions (height, width, length), and quantity.
-//  * The cost is then computed based on the firing type's unit cost and the total volume of the pieces.
-//  *
-//  * Example:
-//  * - 3 teacups (4"W x 2"L x 6"H) with "Oxidation ∆ 6" glaze: 3 * 4 * 2 * 6 * $0.03 = $4.32
-//  * - 4 pieces (5"W x 9"L x 8"H) with "Oxida tion ∆ 10" glaze: 4 * 5 * 9 * 8 * $0.06 = $86.40
-//  *
-//  * Multiple line items can be added, and the total cost is calculated accordingly.
-//  * 
-//  * dk!
-//  */
-// class CeramicsFiringCalculator extends HTMLElement {
-//     constructor() {
-//         super();
-//         this.attachShadow({ mode: "open" });
-
-//         this.WORKSHEET_HEADERS = [
-//             "Firing Type",
-//             "Unit Cost",
-//             "Height",
-//             "Width",
-//             "Length",
-//             "Volume",
-//             "Quantity",
-//             "Price",
-//             "", // For the delete button column
-//         ];
-
-//         this.FIRING_OPTIONS = {
-//             Bisque: 0.04,
-//             "Slipcast Bisque": 0.06,
-//             "Oxidation ∆ 6": 0.04,
-//             "Reduction ∆ 10": 0.04,
-//         };
-
-//         this.USDformatter = new Intl.NumberFormat("en-US", {
-//             style: "currency",
-//             currency: "USD",
-//         });
-
-//         console.log("Ceramics Firing Calculator component initialized!");
-//     }
-
-//     connectedCallback() {
-//         this.lineItems = [];
-//         this.totalCost = 0;
-
-//         const template = document.createElement('template');
-//         template.innerHTML = `
-//       <style>
-//         /* CSS styles for the table and error handling */
-//         table {
-//           width: 100%;
-//           border-collapse: collapse;
-//         }
-
-//         td {
-//           border: 1px solid #ddd;
-//           padding: 8px;
-//           text-align: right;
-//         }
-
-//         input, select {
-//           text-align: right;
-//           border: 0px;
-//         }
-
-//         th {
-//           border: 1px solid #ddd;
-//           padding: 8px;
-//           background-color: #f0f0f0;
-//           text-align: center;
-//         }
-
-//         td[data-error]::after {
-//           content: attr(data-error);
-//           color: red;
-//           font-size: 12px;
-//           display: block;
-//         }
-
-//         .invalid-input {
-//           border-color: red; 
-//         }
-//       </style>
-
-//       <table>
-//         <thead>
-//           <tr>
-//             ${this.WORKSHEET_HEADERS.map(header => `<th>${header}</th>`).join('')} 
-//           </tr>
-//         </thead>
-//         <tbody id="data-rows"></tbody>
-//         <tfoot>
-//           <tr>
-//             <td colspan="7">Total Price:</td>
-//             <td id="total-price">$0.00</td>
-//             <td></td> 
-//           </tr>
-//         </tfoot>
-//       </table>
-
-//       <button id="add-row-button">Add Row</button>
-//       <button id="submit-worksheet-button">Submit Worksheet</button>
-//     `;
-
-//         this.shadowRoot.appendChild(template.content.cloneNode(true));
-
-//         this.dataRows = this.shadowRoot.getElementById('data-rows');
-//         const addRowButton = this.shadowRoot.getElementById('add-row-button');
-//         const submitWorksheetButton = this.shadowRoot.getElementById('submit-worksheet-button');
-
-//         // Add an initial row to the table
-//         const initialRow = this.createRow();
-//         this.dataRows.appendChild(initialRow);
-
-//         // Event listeners for firing type selection and input changes
-//         this.dataRows.addEventListener('change', (event) => {
-//             const target = event.target;
-//             if (target.tagName === 'SELECT') {
-//                 // Handle firing type selection
-//                 const row = target.closest('tr');
-//                 const unitCostCell = row.cells[1];
-//                 const selectedFiringType = target.value;
-//                 const unitCost = this.FIRING_OPTIONS[selectedFiringType] || 0;
-//                 unitCostCell.textContent = this.USDformatter.format(unitCost);
-
-//                 // Recalculate volume and price for this row
-//                 this.calculateRowValues(row);
-
-//                 // Update total cost
-//                 this.updateTotalCost();
-//             } else if (target.tagName === 'INPUT') {
-//                 // Handle dimension or quantity input changes
-//                 const row = target.closest('tr');
-//                 const cell = target.closest('td');
-
-//                 // Input validation
-//                 const errorMessage = this.isValidInput(target.value);
-//                 if (errorMessage) {
-//                     cell.setAttribute('data-error', errorMessage);
-//                     target.classList.add('invalid-input');
-//                     return;
-//                 } else {
-//                     cell.removeAttribute('data-error');
-//                     target.classList.remove('invalid-input');
-//                 }
-
-//                 // Recalculate volume and price for this row
-//                 this.calculateRowValues(row);
-
-//                 // Update total cost
-//                 this.updateTotalCost();
-//             }
-//         });
-
-//         // Event listener for "Delete" buttons
-//         this.dataRows.addEventListener('click', (event) => {
-//             const target = event.target;
-//             if (target.tagName === 'BUTTON' && target.textContent === 'Delete') {
-//                 const row = target.closest('tr');
-//                 row.remove();
-
-//                 // Update total cost after deleting a row
-//                 this.updateTotalCost();
-//             }
-//         });
-
-//         // Event listener for "Add Row" button
-//         addRowButton.addEventListener('click', () => {
-//             const newRow = this.createRow();
-//             this.dataRows.appendChild(newRow);
-//         });
-
-//         // Event listener for "Submit Worksheet" button
-//         submitWorksheetButton.addEventListener('click', () => {
-//             const worksheetData = this.getTableData();
-//             const event = new CustomEvent('submitWorksheet', {
-//                 detail: { data: worksheetData }
-//             });
-//             this.dispatchEvent(event);
-//         });
-//     }
-
-//     createRow() {
-//         const row = document.createElement("tr");
-
-//         const firingTypeCell = document.createElement("td");
-//         const firingTypeSelect = document.createElement("select");
-//         for (const firingType in this.FIRING_OPTIONS) {
-//             const option = document.createElement("option");
-//             option.value = firingType;
-//             option.text = firingType;
-//             firingTypeSelect.appendChild(option);
-//         }
-//         firingTypeCell.appendChild(firingTypeSelect);
-//         row.appendChild(firingTypeCell);
-
-//         // Unit Cost cell
-//         const unitCostCell = document.createElement('td');
-//         const defaultFiringType = firingTypeSelect.value; // Get the default selected firing type
-//         const unitCost = this.FIRING_OPTIONS[defaultFiringType] || 0;
-//         unitCostCell.textContent = this.USDformatter.format(unitCost);
-//         row.appendChild(unitCostCell);
-
-//         // Dimension input cells (height, width, length)
-//         const dimensionInputs = ["height", "width", "length"].map((dimension) => {
-//             const cell = document.createElement("td");
-//             const input = document.createElement("input");
-//             input.type = "number";
-//             input.min = 1;
-//             input.max = 120;
-//             input.value = 1;
-//             input.border = 0;
-//             input.align = "right";
-//             cell.appendChild(input);
-//             return cell;
-//         });
-//         row.append(...dimensionInputs);
-
-//         // Volume cell
-//         const volumeCell = document.createElement("td");
-//         volumeCell.textContent = 1; // Initial volume calculation with default dimensions (1 x 1 x 1)
-//         row.appendChild(volumeCell);
-
-//         // Quantity cell
-//         const quantityCell = document.createElement("td");
-//         const quantityInput = document.createElement("input");
-//         quantityInput.type = "number";
-//         quantityInput.min = 1;
-//         quantityInput.max = 120;
-//         quantityInput.value = 1;
-//         quantityCell.appendChild(quantityInput);
-//         row.appendChild(quantityCell);
-
-//         // Price cell
-//         const priceCell = document.createElement("td");
-//         priceCell.textContent = "$0.00";
-//         row.appendChild(priceCell);
-
-//         // Delete button cell
-//         const deleteButtonCell = document.createElement("td");
-//         const deleteButton = document.createElement("button");
-//         deleteButton.textContent = "Delete";
-//         deleteButtonCell.appendChild(deleteButton);
-//         row.appendChild(deleteButtonCell);
-
-//         // Calculate initial price based on default values
-//         this.calculateRowValues(row); // Call calculateRowValues after the row is fully created
-
-//         return row;
-//     }
-
-//     calculateRowValues(row) {
-//         const height = parseInt(row.cells[2].querySelector("input").value) || 0;
-//         const width = parseInt(row.cells[3].querySelector("input").value) || 0;
-//         const length = parseInt(row.cells[4].querySelector("input").value) || 0;
-//         const quantity = parseInt(row.cells[6].querySelector("input").value) || 0;
-
-//         const volume = height * width * length;
-//         const unitCost = parseFloat(row.cells[1].textContent.replace("$", "")) || 0;
-//         const price = volume * quantity * unitCost;
-
-//         row.cells[5].textContent = volume; // Update volume cell
-//         row.cells[7].textContent = this.USDformatter.format(price); // Update price cell
-
-//         // Update total cost after calculating row values
-//         this.updateTotalCost();
-
-//     }
-
-//     updateTotalCost() {
-//         this.totalCost = 0;
-//         const rows = this.dataRows.querySelectorAll("tr");
-//         rows.forEach((row) => {
-//             const priceText = row.cells[7].textContent; // Assuming Price is the 8th cell
-//             const price = parseFloat(priceText.replace("$", "")) || 0;
-//             this.totalCost += price;
-//         });
-
-//         const totalPriceCell = this.shadowRoot.getElementById("total-price");
-//         totalPriceCell.textContent = this.USDformatter.format(this.totalCost);
-//     }
-
-//     isValidInput(value) {
-//         const parsedValue = parseInt(value);
-//         if (isNaN(parsedValue)) {
-//             return "Please enter a number.";
-//         } else if (parsedValue <= 0 || parsedValue > 120) {
-//             return "Please enter a number between 1 and 120.";
-//         } else {
-//             return ""; // No error
-//         }
-//     }
-
-//     getTableData() {
-//         const data = [];
-//         const rows = this.dataRows.querySelectorAll("tr");
-
-//         rows.forEach((row) => {
-//             const firingType = row.cells[0].querySelector("select").value;
-//             const unitCost = parseFloat(row.cells[1].textContent.replace("$", "")) || 0;
-//             const height = parseInt(row.cells[2].querySelector("input").value) || 0;
-//             const width = parseInt(row.cells[3].querySelector("input").value) || 0;
-//             const length = parseInt(row.cells[4].querySelector("input").value) || 0;
-//             const volume = parseInt(row.cells[5].textContent) || 0;
-//             const quantity = parseInt(row.cells[6].querySelector("input").value) || 0;
-//             const price = parseFloat(row.cells[7].textContent.replace("$", "")) || 0;
-
-//             // Generate a consistent ID for the product
-//             const _id = this.generateProductID({ firingType, height, width, length });
-
-//             data.push({
-//                 _id,
-//                 firingType,
-//                 unitCost,
-//                 height,
-//                 width,
-//                 length,
-//                 volume,
-//                 quantity,
-//                 price,
-//             });
-//         });
-
-//         return data;
-//     }
-
-//     generateProductID({ firingType, height, width, length }) {
-//         // Create a unique string based on product attributes
-//         const rawID = `${firingType}-${height}-${width}-${length}`;
-//         // Generate a hash for uniqueness
-//         let hash = 0;
-//         for (let i = 0; i < rawID.length; i++) {
-//             hash = (hash << 5) - hash + rawID.charCodeAt(i);
-//             hash |= 0; // Convert to 32-bit integer
-//         }
-//         return `${Math.abs(hash)}`; // Ensure positive ID
-//     }
-// }
-
-// customElements.define("ceramics-firing-calculator", CeramicsFiringCalculator);
 class CeramicsFiringCalculator extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: "open" });
 
+        // Constants
+        this.MAX_DIMENSION = 55;
+        this.MAX_QUANTITY = 120;
         this.WORKSHEET_HEADERS = [
             "Firing Type",
             "Unit Cost",
@@ -358,444 +17,342 @@ class CeramicsFiringCalculator extends HTMLElement {
             "Price",
             "Due Date",
             "Special Directions",
-            "", // For the delete button column
+            ""  // Delete button column
         ];
-        const config = require('../config.json');
-        console.log("consfi", config);
-        this.FIRING_OPTIONS = config.firingOptions
-        this.rushJobDays = config.rushJobDays; // Default rush job threshold in days
-        this.rushJobPremium = config.rushJobDays; // Default rush job premium percentage
+
+        // Default firing options in case config fails to load
+        this.FIRING_OPTIONS = {
+            "Bisque": 0.04,
+            "Slipcast Bisque": 0.06,
+            "Oxidation ∆ 6": 0.04,
+            "Reduction ∆ 10": 0.04
+        };
+        this.rushJobDays = 3;
+        this.rushJobPremium = 25;
+
+        // Try to load config
+        try {
+            const config = require('../config.json');
+            this.FIRING_OPTIONS = config.firingOptions || this.FIRING_OPTIONS;
+            this.rushJobDays = config.rushJobDays || this.rushJobDays;
+            this.rushJobPremium = config.rushJobPremium || this.rushJobPremium;
+        } catch (error) {
+            console.error('Failed to load config, using defaults:', error);
+        }
 
         this.USDformatter = new Intl.NumberFormat("en-US", {
             style: "currency",
             currency: "USD",
         });
 
-        console.log("Ceramics Firing Calculator component initialized!");
+        this.lineItems = [];
+        this.totalCost = 0;
     }
 
     connectedCallback() {
-        this.lineItems = [];
-        this.totalCost = 0;
-
         const template = document.createElement('template');
         template.innerHTML = `
-      <style>
-  /* General Styles */
-  :host {
-    font-family: Arial, sans-serif;
-    display: block;
-    padding: 20px;
-    background-color: #f8f9fa;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    max-width: 100%;
-    box-sizing: border-box;
-  }
+            <style>
+                :host {
+                    font-family: Arial, sans-serif;
+                    display: block;
+                    padding: 20px;
+                    background-color: #f8f9fa;
+                    border-radius: 10px;
+                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                }
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 20px;
-    font-size: 14px;
-    background-color: #ffffff;
-    border: 1px solid #dee2e6;
-    border-radius: 5px;
-    overflow: hidden;
-  }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-bottom: 20px;
+                    background-color: white;
+                    border: 1px solid #dee2e6;
+                }
 
-  th {
-    padding: 10px;
-    background-color: #343a40;
-    color: white;
-    text-align: center;
-    font-weight: bold;
-    border-bottom: 2px solid #495057;
-  }
+                th {
+                    padding: 12px;
+                    background-color: #343a40;
+                    color: white;
+                    font-weight: bold;
+                    text-align: center;
+                }
 
-  td {
-    padding: 8px;
-    text-align: center;
-    border-bottom: 1px solid #dee2e6;
-    vertical-align: middle;
-  }
+                td {
+                    padding: 8px;
+                    border: 1px solid #dee2e6;
+                    text-align: center;
+                }
 
-  td:last-child {
-    text-align: center;
-  }
+                input, select, textarea {
+                    width: 90%;
+                    padding: 6px;
+                    border: 1px solid #ced4da;
+                    border-radius: 4px;
+                    font-size: 14px;
+                }
 
-  td[data-error]::after {
-    content: attr(data-error);
-    color: red;
-    font-size: 12px;
-    display: block;
-    margin-top: 4px;
-  }
+                .invalid-input {
+                    border-color: #dc3545;
+                    background-color: #f8d7da;
+                }
 
-  input, select, textarea {
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    padding: 5px;
-    font-size: 14px;
-    width: 90%;
-    box-sizing: border-box;
-    background-color: #ffffff;
-  }
+                td[data-error]::after {
+                    content: attr(data-error);
+                    color: #dc3545;
+                    font-size: 12px;
+                    display: block;
+                }
 
-  input:focus, select:focus, textarea:focus {
-    outline: none;
-    border-color: #495057;
-    box-shadow: 0 0 3px rgba(0, 123, 255, 0.5);
-  }
+                button {
+                    background-color: black;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 10px 20px;
+                    cursor: pointer;
+                    margin-right: 10px;
+                }
 
-  .invalid-input {
-    border-color: red;
-    background-color: #f8d7da;
-  }
+                button:hover {
+                    background-color: #F15A29;
+                }
 
-  textarea {
-    resize: none;
-    height: 60px;
-  }
+                @media (max-width: 768px) {
+                    table {
+                        display: block;
+                        overflow-x: auto;
+                    }
+                }
+            </style>
 
-  button {
-    background-color: black;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 10px 20px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.3s;
-    margin-right: 10px;
-  }
+            <table>
+                <thead>
+                    <tr>
+                        ${this.WORKSHEET_HEADERS.map(header => `<th>${header}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody id="data-rows"></tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="7">Total Price:</td>
+                        <td id="total-price">$0.00</td>
+                        <td colspan="3"></td>
+                    </tr>
+                </tfoot>
+            </table>
 
-  button:hover {
-    background-color: #F15A29;
-  }
-
-  button:disabled {
-    background-color: #adb5bd;
-    cursor: not-allowed;
-  }
-
-  #add-row-button, #submit-worksheet-button, #admin-settings-button {
-    margin-top: 10px;
-  }
-
-  #total-price {
-    font-weight: bold;
-    color: #343a40;
-  }
-
-  tr:nth-child(even) {
-    background-color: #f2f2f2;
-  }
-
-  tr:hover {
-    background-color: #e9ecef;
-  }
-
-  th:first-child, td:first-child {
-    text-align: right;
-    padding-left: 10px;
-  }
-
-  /* Responsive Design */
-  @media (max-width: 768px) {
-    table, thead, tbody, th, td, tr {
-      display: grid;
-    }
-
-    thead {
-      display: none;
-    }
-
-    tr {
-      margin-bottom: 15px;
-      border: 1px solid #dee2e6;
-      border-radius: 5px;
-      padding: 10px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      background-color: #ffffff;
-    }
-
-    td {
-      display: flex;
-      justify-content: space-between;
-      padding: 10px;
-    }
-
-    td:before {
-      content: attr(data-label);
-      font-weight: bold;
-      text-transform: capitalize;
-      color: #495057;
-      flex: 1;
-      padding-right: 10px;
-    }
-
-    input, select, textarea {
-      width: 100%;
-    }
-
-    #add-row-button, #submit-worksheet-button, #admin-settings-button {
-      width: 100%;
-      margin: 10px 0;
-    }
-  }
-</style>
-
-      <table>
-        <thead>
-          <tr>
-            ${this.WORKSHEET_HEADERS.map(header => `<th>${header}</th>`).join('')} 
-          </tr>
-        </thead>
-        <tbody id="data-rows"></tbody>
-        <tfoot>
-          <tr>
-            <td colspan="8">Total Price:</td>
-            <td id="total-price">$0.00</td>
-            <td colspan="2"></td> 
-          </tr>
-        </tfoot>
-      </table>
-
-      <button id="add-row-button">Add Row</button>
-      <button id="submit-worksheet-button">Submit Worksheet</button>
-    `;
+            <button id="add-row-button">Add Row</button>
+            <button id="submit-worksheet-button">Submit Worksheet</button>
+        `;
 
         this.shadowRoot.appendChild(template.content.cloneNode(true));
 
         this.dataRows = this.shadowRoot.getElementById('data-rows');
         const addRowButton = this.shadowRoot.getElementById('add-row-button');
         const submitWorksheetButton = this.shadowRoot.getElementById('submit-worksheet-button');
-        const adminSettingsButton = this.shadowRoot.getElementById('admin-settings-button');
 
-        const initialRow = this.createRow();
-        this.dataRows.appendChild(initialRow);
+        // Add initial row
+        this.addRow();
 
-        this.dataRows.addEventListener('change', (event) => {
-            const target = event.target;
-            const row = target.closest('tr');
-            const cell = target.closest('td');
-
-            if (target.tagName === 'SELECT') {
-                const unitCostCell = row.cells[1];
-                const selectedFiringType = target.value;
-                const unitCost = this.FIRING_OPTIONS[selectedFiringType] || 0;
-                unitCostCell.textContent = this.USDformatter.format(unitCost);
-                this.calculateRowValues(row);
-                this.updateTotalCost();
-            } else if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-                if (target.type === 'number') {
-                    const errorMessage = this.isValidInput(target.value);
-                    if (errorMessage) {
-                        cell.setAttribute('data-error', errorMessage);
-                        target.classList.add('invalid-input');
-                        return;
-                    } else {
-                        cell.removeAttribute('data-error');
-                        target.classList.remove('invalid-input');
-                    }
-                }
-                this.calculateRowValues(row);
-                this.updateTotalCost();
-            }
-        });
-
-        this.dataRows.addEventListener('click', (event) => {
-            const target = event.target;
-            if (target.tagName === 'BUTTON' && target.textContent === 'Delete') {
-                const row = target.closest('tr');
-                row.remove();
-                this.updateTotalCost();
-            }
-        });
-
-        addRowButton.addEventListener('click', () => {
-            const newRow = this.createRow();
-            this.dataRows.appendChild(newRow);
-        });
-
-        submitWorksheetButton.addEventListener('click', () => {
-            const worksheetData = this.getTableData();
-            const event = new CustomEvent('submitWorksheet', {
-                detail: { data: worksheetData }
-            });
-            this.dispatchEvent(event);
-        });
-
-        adminSettingsButton.addEventListener('click', () => {
-            this.openAdminSettings();
-        });
+        // Event listeners
+        this.dataRows.addEventListener('change', this.handleRowChange.bind(this));
+        this.dataRows.addEventListener('click', this.handleDelete.bind(this));
+        addRowButton.addEventListener('click', () => this.addRow());
+        submitWorksheetButton.addEventListener('click', () => this.submitWorksheet());
     }
 
-    createRow() {
-        const row = document.createElement("tr");
+    handleRowChange(event) {
+        const target = event.target;
+        const row = target.closest('tr');
 
-        const firingTypeCell = document.createElement("td");
-        const firingTypeSelect = document.createElement("select");
-        for (const firingType in this.FIRING_OPTIONS) {
-            const option = document.createElement("option");
-            option.value = firingType;
-            option.text = firingType;
-            firingTypeSelect.appendChild(option);
+        if (target.tagName === 'SELECT') {
+            const unitCostCell = row.cells[1];
+            const selectedFiringType = target.value;
+            const unitCost = this.FIRING_OPTIONS[selectedFiringType] || 0;
+            unitCostCell.textContent = this.USDformatter.format(unitCost);
         }
+
+        if (target.type === 'number') {
+            const cell = target.closest('td');
+            const error = this.validateInput(target.value);
+            
+            if (error) {
+                cell.setAttribute('data-error', error);
+                target.classList.add('invalid-input');
+                return;
+            } else {
+                cell.removeAttribute('data-error');
+                target.classList.remove('invalid-input');
+            }
+        }
+
+        this.calculateRowValues(row);
+        this.updateTotalCost();
+    }
+
+    handleDelete(event) {
+        if (event.target.tagName === 'BUTTON' && event.target.textContent === 'Delete') {
+            const row = event.target.closest('tr');
+            row.remove();
+            this.updateTotalCost();
+        }
+    }
+
+    validateInput(value) {
+        if (!value) return "Field required";
+        const num = parseInt(value);
+        if (isNaN(num)) return "Must be a number";
+        if (num <= 0) return "Must be positive";
+        if (num > this.MAX_DIMENSION) return `Max ${this.MAX_DIMENSION}`;
+        return null;
+    }
+
+    addRow() {
+        const row = document.createElement('tr');
+        
+        // Firing type select
+        const firingTypeCell = document.createElement('td');
+        const firingTypeSelect = document.createElement('select');
+        Object.keys(this.FIRING_OPTIONS).forEach(type => {
+            const option = document.createElement('option');
+            option.value = type;
+            option.text = type;
+            firingTypeSelect.appendChild(option);
+        });
         firingTypeCell.appendChild(firingTypeSelect);
         row.appendChild(firingTypeCell);
 
+        // Unit cost
         const unitCostCell = document.createElement('td');
-        const defaultFiringType = firingTypeSelect.value;
-        const unitCost = this.FIRING_OPTIONS[defaultFiringType] || 0;
-        unitCostCell.textContent = this.USDformatter.format(unitCost);
+        const initialUnitCost = this.FIRING_OPTIONS[firingTypeSelect.value] || 0;
+        unitCostCell.textContent = this.USDformatter.format(initialUnitCost);
         row.appendChild(unitCostCell);
 
-        const dimensionInputs = ["height", "width", "length"].map(() => {
-            const cell = document.createElement("td");
-            const input = document.createElement("input");
-            input.type = "number";
-            input.min = 1;
-            input.max = 55; // TODO: convert magic number to CONST
-            input.value = 1;
+        // Dimension inputs (height, width, length)
+        ['height', 'width', 'length'].forEach(() => {
+            const cell = document.createElement('td');
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = '1';
+            input.max = String(this.MAX_DIMENSION);
+            input.value = '1';
             cell.appendChild(input);
-            return cell;
+            row.appendChild(cell);
         });
-        row.append(...dimensionInputs);
 
-        const volumeCell = document.createElement("td");
-        volumeCell.textContent = 1;
+        // Volume
+        const volumeCell = document.createElement('td');
+        volumeCell.textContent = '1';
         row.appendChild(volumeCell);
 
-        const quantityCell = document.createElement("td");
-        const quantityInput = document.createElement("input");
-        quantityInput.type = "number";
-        quantityInput.min = 1;
-        quantityInput.max = 120;
-        quantityInput.value = 1;
+        // Quantity
+        const quantityCell = document.createElement('td');
+        const quantityInput = document.createElement('input');
+        quantityInput.type = 'number';
+        quantityInput.min = '1';
+        quantityInput.max = String(this.MAX_QUANTITY);
+        quantityInput.value = '1';
         quantityCell.appendChild(quantityInput);
         row.appendChild(quantityCell);
 
-        const priceCell = document.createElement("td");
-        priceCell.textContent = "$0.00";
+        // Price
+        const priceCell = document.createElement('td');
+        priceCell.textContent = this.USDformatter.format(0);
         row.appendChild(priceCell);
-        const dueDateCell = document.createElement("td");
-        const dueDateInput = document.createElement("input");
-        dueDateInput.type = "date";
 
-        // Disable past dates
-        const today = new Date().toISOString().split("T")[0];
-        dueDateInput.min = today;
-
+        // Due date
+        const dueDateCell = document.createElement('td');
+        const dueDateInput = document.createElement('input');
+        dueDateInput.type = 'date';
+        dueDateInput.min = new Date().toISOString().split('T')[0];
         dueDateCell.appendChild(dueDateInput);
         row.appendChild(dueDateCell);
 
-        const directionsCell = document.createElement("td");
-        const directionsInput = document.createElement("textarea");
+        // Special directions
+        const directionsCell = document.createElement('td');
+        const directionsInput = document.createElement('textarea');
         directionsCell.appendChild(directionsInput);
         row.appendChild(directionsCell);
 
-        const deleteButtonCell = document.createElement("td");
-        const deleteButton = document.createElement("button");
-        deleteButton.textContent = "Delete";
-        deleteButtonCell.appendChild(deleteButton);
-        row.appendChild(deleteButtonCell);
+        // Delete button
+        const deleteCell = document.createElement('td');
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = 'Delete';
+        deleteCell.appendChild(deleteButton);
+        row.appendChild(deleteCell);
 
+        this.dataRows.appendChild(row);
         this.calculateRowValues(row);
-        return row;
     }
 
     calculateRowValues(row) {
-        const height = parseInt(row.cells[2].querySelector("input").value) || 0;
-        const width = parseInt(row.cells[3].querySelector("input").value) || 0;
-        const length = parseInt(row.cells[4].querySelector("input").value) || 0;
-        const quantity = parseInt(row.cells[6].querySelector("input").value) || 0;
-        const dueDateInput = row.cells[8].querySelector("input").value;
+        const height = parseInt(row.cells[2].querySelector('input').value) || 0;
+        const width = parseInt(row.cells[3].querySelector('input').value) || 0;
+        const length = parseInt(row.cells[4].querySelector('input').value) || 0;
+        const quantity = parseInt(row.cells[6].querySelector('input').value) || 0;
+        const dueDate = row.cells[8].querySelector('input').value;
 
         const volume = height * width * length;
-        const unitCost = parseFloat(row.cells[1].textContent.replace("$", "")) || 0;
+        const unitCost = parseFloat(row.cells[1].textContent.replace(/[^0-9.-]+/g, '')) || 0;
         let price = volume * quantity * unitCost;
 
-        if (dueDateInput) {
-            const dueDate = new Date(dueDateInput);
-            const today = new Date();
-            const diffInDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-
-            if (diffInDays > 0 && diffInDays <= this.rushJobDays) {
-                price *= 1 + this.rushJobPremium / 100;
+        if (dueDate) {
+            const daysDiff = Math.ceil((new Date(dueDate) - new Date()) / (1000 * 60 * 60 * 24));
+            if (daysDiff <= this.rushJobDays) {
+                price *= (1 + this.rushJobPremium / 100);
             }
         }
 
         row.cells[5].textContent = volume;
         row.cells[7].textContent = this.USDformatter.format(price);
-        this.updateTotalCost();
     }
 
     updateTotalCost() {
-        this.totalCost = 0;
-        const rows = this.dataRows.querySelectorAll("tr");
-        rows.forEach((row) => {
-            const priceText = row.cells[7].textContent;
-            const price = parseFloat(priceText.replace("$", "")) || 0;
-            this.totalCost += price;
-        });
+        const total = Array.from(this.dataRows.querySelectorAll('tr'))
+            .reduce((sum, row) => {
+                const price = parseFloat(row.cells[7].textContent.replace(/[^0-9.-]+/g, '')) || 0;
+                return sum + price;
+            }, 0);
 
-        const totalPriceCell = this.shadowRoot.getElementById("total-price");
-        totalPriceCell.textContent = this.USDformatter.format(this.totalCost);
+        const totalPriceCell = this.shadowRoot.getElementById('total-price');
+        totalPriceCell.textContent = this.USDformatter.format(total);
     }
 
-    isValidInput(value) {
-        if (value === "") return "This field cannot be empty.";
-        const parsedValue = parseInt(value);
-        if (isNaN(parsedValue)) return "Must be a valid number.";
-        if (parsedValue <= 0) return "Must be greater than zero.";
-        if (parsedValue > 120) return "Cannot be greater than 120.";
-        return null;
+    submitWorksheet() {
+        const data = Array.from(this.dataRows.querySelectorAll('tr')).map(row => ({
+            _id: this.generateProductID({
+                firingType: row.cells[0].querySelector('select').value,
+                height: parseInt(row.cells[2].querySelector('input').value),
+                width: parseInt(row.cells[3].querySelector('input').value),
+                length: parseInt(row.cells[4].querySelector('input').value)
+            }),
+            firingType: row.cells[0].querySelector('select').value,
+            unitCost: parseFloat(row.cells[1].textContent.replace(/[^0-9.-]+/g, '')),
+            height: parseInt(row.cells[2].querySelector('input').value),
+            width: parseInt(row.cells[3].querySelector('input').value),
+            length: parseInt(row.cells[4].querySelector('input').value),
+            volume: parseInt(row.cells[5].textContent),
+            quantity: parseInt(row.cells[6].querySelector('input').value),
+            price: parseFloat(row.cells[7].textContent.replace(/[^0-9.-]+/g, '')),
+            dueDate: row.cells[8].querySelector('input').value || null,
+            specialDirections: row.cells[9].querySelector('textarea').value || null
+        }));
+
+        this.dispatchEvent(new CustomEvent('submitWorksheet', {
+            detail: { data }
+        }));
     }
 
-    getTableData() {
-        const tableData = [];
-        const rows = this.dataRows.querySelectorAll("tr");
-        rows.forEach((row) => {
-            const rowData = {
-                firingType: row.cells[0].querySelector("select").value,
-                unitCost: parseFloat(row.cells[1].textContent.replace("$", "")),
-                height: parseInt(row.cells[2].querySelector("input").value),
-                width: parseInt(row.cells[3].querySelector("input").value),
-                length: parseInt(row.cells[4].querySelector("input").value),
-                volume: parseInt(row.cells[5].textContent),
-                quantity: parseInt(row.cells[6].querySelector("input").value),
-                price: parseFloat(row.cells[7].textContent.replace("$", "")),
-                dueDate: row.cells[8].querySelector("input").value || null,
-                specialDirections: row.cells[9].querySelector("textarea").value || null,
-            };
-            const firingType = rowData.firingType
-            const height = rowData.height
-            const width = rowData.width
-            const length = rowData.length
-            const _id = this.generateProductID({ firingType, height, width, length });
-            rowData._id = _id
-            tableData.push(rowData);
-        });
-        return tableData;
-    }
     generateProductID({ firingType, height, width, length }) {
-        // Create a unique string based on product attributes
         const rawID = `${firingType}-${height}-${width}-${length}`;
-        // Generate a hash for uniqueness
         let hash = 0;
         for (let i = 0; i < rawID.length; i++) {
             hash = (hash << 5) - hash + rawID.charCodeAt(i);
-            hash |= 0; // Convert to 32-bit integer
+            hash |= 0;
         }
-        return `${Math.abs(hash)}`; // Ensure positive ID
-    }
-
-    openAdminSettings() {
-        // Implementation for the admin settings
-        console.log("Admin Settings interface is not implemented yet.");
+        return `${Math.abs(hash)}`;
     }
 }
 
-customElements.define("ceramics-firing-calculator", CeramicsFiringCalculator);
+customElements.define('ceramics-firing-calculator', CeramicsFiringCalculator);
