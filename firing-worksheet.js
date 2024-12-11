@@ -2,8 +2,10 @@ class CeramicsFiringCalculator extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: "open" });
-
+        
         // Constants
+     this.MIN_DAYS_AHEAD = 1;
+        this.DEFAULT_DAYS_AHEAD = 10;
         this.MAX_DIMENSION = 55;
         this.MAX_QUANTITY = 120;
         this.WORKSHEET_HEADERS = [
@@ -20,7 +22,6 @@ class CeramicsFiringCalculator extends HTMLElement {
             ""  // Delete button column
         ];
 
-        // Default firing options in case config fails to load
         this.FIRING_OPTIONS = {
             "Bisque": 0.04,
             "Slipcast Bisque": 0.06,
@@ -165,18 +166,28 @@ class CeramicsFiringCalculator extends HTMLElement {
     handleRowChange(event) {
         const target = event.target;
         const row = target.closest('tr');
+        const cell = target.closest('td');
 
         if (target.tagName === 'SELECT') {
             const unitCostCell = row.cells[1];
             const selectedFiringType = target.value;
             const unitCost = this.FIRING_OPTIONS[selectedFiringType] || 0;
             unitCostCell.textContent = this.USDformatter.format(unitCost);
-        }
-
-        if (target.type === 'number') {
-            const cell = target.closest('td');
-            const error = this.validateInput(target.value);
+        } else if (target.type === 'date') {
+            const selectedDate = new Date(target.value);
+            const minDate = new Date();
+            minDate.setDate(minDate.getDate() + this.MIN_DAYS_AHEAD);
             
+            if (selectedDate < minDate) {
+                cell.setAttribute('data-error', 'Due date must be at least tomorrow');
+                target.classList.add('invalid-input');
+                return;
+            } else {
+                cell.removeAttribute('data-error');
+                target.classList.remove('invalid-input');
+            }
+        } else if (target.type === 'number') {
+            const error = this.validateInput(target.value);
             if (error) {
                 cell.setAttribute('data-error', error);
                 target.classList.add('invalid-input');
@@ -261,11 +272,17 @@ class CeramicsFiringCalculator extends HTMLElement {
         priceCell.textContent = this.USDformatter.format(0);
         row.appendChild(priceCell);
 
-        // Due date
+        // Due date with inline date calculations
+        const minDate = new Date();
+        minDate.setDate(minDate.getDate() + this.MIN_DAYS_AHEAD);
+        const defaultDate = new Date();
+        defaultDate.setDate(defaultDate.getDate() + this.DEFAULT_DAYS_AHEAD);
+
         const dueDateCell = document.createElement('td');
         const dueDateInput = document.createElement('input');
         dueDateInput.type = 'date';
-        dueDateInput.min = new Date().toISOString().split('T')[0];
+        dueDateInput.min = minDate.toISOString().split('T')[0];
+        dueDateInput.value = defaultDate.toISOString().split('T')[0];
         dueDateCell.appendChild(dueDateInput);
         row.appendChild(dueDateCell);
 
