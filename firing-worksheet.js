@@ -20,8 +20,16 @@ class CeramicsFiringCalculator extends HTMLElement {
             "Due Date",
             "Special Directions",
             "Photo Upload",
+            "Preview",
             "" // Delete button column
         ];
+
+        // image handling
+        this.MAX_IMAGE_WIDTH = 800;
+        this.MAX_IMAGE_HEIGHT = 800;
+        this.THUMBNAIL_WIDTH = 100;
+        this.THUMBNAIL_HEIGHT = 100;
+        this.MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
         this.FIRING_OPTIONS = {
             "Bisque": 0.04,
@@ -147,6 +155,49 @@ class CeramicsFiringCalculator extends HTMLElement {
                     border-color: #dc3545;
                     background-color: white;
                 }
+
+                .thumbnail {
+                    max-width: 100px;
+                    max-height: 100px;
+                    object-fit: contain;
+                    border: 1px solid #dee2e6;
+                    border-radius: 4px;
+                    background-color: #f8f9fa;
+                    display: block; /* Prevents unwanted spacing */
+                    margin: 0 auto; /* Centers the thumbnail */
+                }
+
+                .preview-cell {
+                    width: 100px;
+                    height: 100px;
+                    padding: 4px;
+                    text-align: center; /* Centers the thumbnail container */
+                    vertical-align: middle;
+                    background-color: #f8f9fa;
+                }
+
+                input[type="file"] {
+                    max-width: 220px; /* Prevents file input from being too wide */
+                    overflow: hidden; /* Handles long filenames */
+                    text-overflow: ellipsis; /* Shows ... for long filenames */
+                }
+
+                /* Improves the file input appearance */
+                input[type="file"]::-webkit-file-upload-button {
+                    background-color: black;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 8px 12px;
+                    cursor: pointer;
+                    margin-right: 8px;
+                    transition: background-color 0.2s ease;
+                }
+
+                input[type="file"]::-webkit-file-upload-button:hover {
+                    background-color: #F15A29;
+                }
+
 
                 td[data-error]::after {
                     content: attr(data-error);
@@ -319,6 +370,108 @@ class CeramicsFiringCalculator extends HTMLElement {
             });
         }
     }
+
+    async processImage(file, row) {
+        if (!file.type.startsWith('image/')) {
+            throw new Error('Please upload an image file');
+        }
+
+        if (file.size > this.MAX_FILE_SIZE) {
+            throw new Error('File size exceeds 5MB limit');
+        }
+
+        try {
+            // Create optimized version and thumbnail
+            const [optimizedImage, thumbnail] = await Promise.all([
+                this.createOptimizedImage(file),
+                this.createThumbnail(file)
+            ]);
+
+            // Store both versions in the row's dataset
+            row.dataset.optimizedPhoto = optimizedImage;
+            
+            // Update preview cell with thumbnail
+            const previewCell = row.cells[row.cells.length - 2];
+            const img = document.createElement('img');
+            img.src = thumbnail;
+            img.alt = 'Preview';
+            img.className = 'thumbnail';
+            previewCell.innerHTML = '';
+            previewCell.appendChild(img);
+
+            return true;
+        } catch (error) {
+            console.error('Image processing failed:', error);
+            throw new Error('Failed to process image');
+        }
+    }
+
+    async createOptimizedImage(file) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let { width, height } = img;
+
+                // Calculate new dimensions while maintaining aspect ratio
+                if (width > this.MAX_IMAGE_WIDTH || height > this.MAX_IMAGE_HEIGHT) {
+                    const ratio = Math.min(
+                        this.MAX_IMAGE_WIDTH / width,
+                        this.MAX_IMAGE_HEIGHT / height
+                    );
+                    width *= ratio;
+                    height *= ratio;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Convert to WebP if supported, fallback to JPEG
+                try {
+                    const webpData = canvas.toDataURL('image/webp', 0.8);
+                    resolve(webpData.split(',')[1]); // Return base64 without data URL prefix
+                } catch {
+                    const jpegData = canvas.toDataURL('image/jpeg', 0.8);
+                    resolve(jpegData.split(',')[1]);
+                }
+            };
+            img.onerror = reject;
+            img.src = URL.createObjectURL(file);
+        });
+    }
+
+    async createThumbnail(file) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = this.THUMBNAIL_WIDTH;
+                canvas.height = this.THUMBNAIL_HEIGHT;
+
+                const ctx = canvas.getContext('2d');
+                const scale = Math.max(
+                    this.THUMBNAIL_WIDTH / img.width,
+                    this.THUMBNAIL_HEIGHT / img.height
+                );
+                const width = img.width * scale;
+                const height = img.height * scale;
+                const x = (this.THUMBNAIL_WIDTH - width) / 2;
+                const y = (this.THUMBNAIL_HEIGHT - height) / 2;
+
+                ctx.fillStyle = '#f8f9fa';
+                ctx.fillRect(0, 0, this.THUMBNAIL_WIDTH, this.THUMBNAIL_HEIGHT);
+                ctx.drawImage(img, x, y, width, height);
+
+                resolve(canvas.toDataURL('image/jpeg', 0.7));
+            };
+            img.onerror = reject;
+            img.src = URL.createObjectURL(file);
+        });
+    }
+
     addRow() {
         const row = document.createElement('tr');
 
@@ -391,20 +544,37 @@ class CeramicsFiringCalculator extends HTMLElement {
         const directionsInput = document.createElement('textarea');
         directionsCell.appendChild(directionsInput);
         row.appendChild(directionsCell);
-        // Photo upload
+
+        // Photo upload with immediate processing
         const photoCell = document.createElement('td');
         const photoInput = document.createElement('input');
         photoInput.type = 'file';
-        photoInput.accept = 'image/*';
+        photoInput.accept = 'image/jpeg,image/png,image/webp';
         photoInput.addEventListener('change', async (event) => {
             const file = event.target.files[0];
-            if (file) {
-                const base64 = await this.fileToBase64(file);
-                row.dataset.photoBuffer = base64; // Store Base64 string
+            if (!file) return;
+
+            const row = event.target.closest('tr');
+            const loader = this.shadowRoot.getElementById('loader');
+            
+            try {
+                loader.classList.remove('hidden');
+                await this.processImage(file, row);
+            } catch (error) {
+                alert(error.message);
+                photoInput.value = ''; // Clear the input
+            } finally {
+                loader.classList.add('hidden');
             }
         });
+
         photoCell.appendChild(photoInput);
         row.appendChild(photoCell);
+
+        // Preview cell
+        const previewCell = document.createElement('td');
+        previewCell.className = 'preview-cell';
+        row.appendChild(previewCell);
 
         // Existing code to append row...
         this.dataRows.appendChild(row);
