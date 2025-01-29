@@ -29,11 +29,11 @@ export const addWorksheetToCart = webMethod(
  * @returns {Promise<Object>} - Uploaded media details.
  */
 export const uploadImage = webMethod(Permissions.Anyone, async (buffer64) => {
-    const buffer = Buffer.from(buffer64, "base64");
     return mediaManager.upload(
         "/firing-worksheet-Uploads",
-        buffer,
-        "myFileName.png", {
+        buffer64,
+        `firing-${Date.now()}.png`,
+        {
             mediaOptions: {
                 mimeType: "image/png",
                 mediaType: "image",
@@ -43,101 +43,116 @@ export const uploadImage = webMethod(Permissions.Anyone, async (buffer64) => {
 });
 
 /**
- * Generates custom line items from worksheet data and adds them to the cart.
+ * Processes worksheet data into custom line items with parallel image processing.
+ * @param {Array} worksheetData - Array of worksheet data to be processed.
+ * @returns {Promise<Array>} - Array of custom line items.
+ */
+async function processWorksheetData(worksheetData) {
+    try {
+        // Start all image uploads in parallel
+        const imageUploadPromises = worksheetData
+            .filter(item => item.photoBuffer)
+            .map(async item => ({
+                _id: item._id,
+                imageData: await uploadImage(item.photoBuffer).catch(error => {
+                    console.error(`Failed to upload image for item ${item._id}:`, error);
+                    return null;
+                })
+            }));
+
+        // Wait for all image uploads to complete
+        const uploadedImages = await Promise.all(imageUploadPromises);
+        
+        // Create a map for quick image URL lookup
+        const imageUrlMap = new Map(
+            uploadedImages
+                .filter(({imageData}) => imageData !== null)
+                .map(({_id, imageData}) => [_id, imageData.fileUrl])
+        );
+
+        // Create all line items
+        return worksheetData.map(item => ({
+            itemType: { custom: "custom" },
+            media: imageUrlMap.get(item._id) || "",
+            price: item.price.toString(),
+            priceDescription: { original: item.price.toString() },
+            descriptionLines: [
+                {
+                    name: { original: "Due Date" },
+                    plainText: { original: item.dueDate },
+                },
+                {
+                    name: { original: "Special Directions" },
+                    plainText: { original: item?.specialDirections || "" },
+                },
+                {
+                    name: { original: "Height" },
+                    plainText: { original: item.height.toString() },
+                },
+                {
+                    name: { original: "Width" },
+                    plainText: { original: item.width.toString() },
+                },
+                {
+                    name: { original: "Length" },
+                    plainText: { original: item.length.toString() },
+                },
+            ],
+            productName: { original: item.firingType },
+            catalogReference: {
+                appId: APP_ID,
+                catalogItemId: item._id,
+                options: {
+                    Type: item.firingType,
+                    Height: item.height.toString(),
+                    Width: item.width.toString(),
+                    Length: item.length.toString(),
+                    Image: imageUrlMap.get(item._id) || "",
+                },
+            },
+            quantity: item.quantity,
+        }));
+    } catch (error) {
+        console.error("Error processing worksheet data:", error);
+        throw error;
+    }
+}
+
+/**
+ * Generates custom line items from worksheet data and manages cart operations.
  * @param {Array} worksheetData - Array of worksheet data to be processed.
  * @returns {Promise<Object>} - Updated or newly created cart.
  */
 async function generateCustomLineItemsFromWorksheet(worksheetData) {
     try {
-        const elevatedGetCurrentCart = elevate(currentCart.getCurrentCart);
-        const existingCart = await elevatedGetCurrentCart();
+        const [existingCart, customLineItems] = await Promise.all([
+            elevate(currentCart.getCurrentCart)(),
+            processWorksheetData(worksheetData)
+        ]);
 
-        // Process worksheet data into custom line items
-        const customLineItems = await processWorksheetData(worksheetData);
         if (!existingCart) {
-            // Create a new cart if none exists
             const elevatedCreateCart = elevate(cart.createCart);
-            const newCart = await elevatedCreateCart({ customLineItems });
-            return newCart;
-        } else {
-            // Update the existing cart
-            const firingItems = existingCart.lineItems.filter(
-                (item) => item.itemType.custom === "custom"
-            );
-            const firingItemIds = firingItems.map((item) => item._id);
-
-            const elevatedAddToCart = elevate(currentCart.addToCurrentCart);
-            if (firingItemIds.length) {
-                await currentCart.removeLineItemsFromCurrentCart(firingItemIds);
-            }
-
-            const updatedCart = await elevatedAddToCart({ customLineItems });
-            return updatedCart;
+            return await elevatedCreateCart({ customLineItems });
         }
+
+        // Remove existing custom items
+        const firingItems = existingCart.lineItems.filter(
+            item => item.itemType.custom === "custom"
+        );
+        
+        if (firingItems.length) {
+            await currentCart.removeLineItemsFromCurrentCart(
+                firingItems.map(item => item._id)
+            );
+        }
+
+        // Add new items
+        const elevatedAddToCart = elevate(currentCart.addToCurrentCart);
+        return await elevatedAddToCart({ customLineItems });
     } catch (error) {
         console.error("Error generating custom line items:", error);
-
-        // Fallback: Create a new cart with the provided worksheet data
-        return await handleFallbackCartCreation(worksheetData);
+        return handleFallbackCartCreation(worksheetData);
     }
-}
-
-/**
- * Processes worksheet data into custom line items for the cart.
- * @param {Array} worksheetData - Array of worksheet data to be processed.
- * @returns {Promise<Array>} - Array of custom line items.
- */
-async function processWorksheetData(worksheetData) {
-    return Promise.all(
-        worksheetData.map(async (item) => {
-            let imgUrl = "";
-
-            if (item.photoBuffer) {
-                const imageData = await uploadImage(item.photoBuffer);
-                imgUrl = imageData.fileUrl
-            }
-            return {
-                itemType: { custom: "custom" },
-                media: imgUrl,
-                price: item.price.toString(),
-                priceDescription: { original: item.price.toString() },
-                descriptionLines: [{
-                        name: { original: "Due Date" },
-                        plainText: { original: item.dueDate },
-                    },
-                    {
-                        name: { original: "Special Directions" },
-                        plainText: { original: item?.specialDirections || "" },
-                    },
-                    {
-                        name: { original: "Height" },
-                        plainText: { original: item.height.toString() },
-                    },
-                    {
-                        name: { original: "Width" },
-                        plainText: { original: item.width.toString() },
-                    },
-                    {
-                        name: { original: "Length" },
-                        plainText: { original: item.length.toString() },
-                    },
-                ],
-                productName: { original: item.firingType },
-                catalogReference: {
-                    appId: APP_ID,
-                    catalogItemId: item._id,
-                    options: {
-                        Type: item.firingType,
-                        Height: item.height.toString(),
-                        Width: item.width.toString(),
-                        Length: item.length.toString(),
-                        Image: imgUrl,
-                    },
-                },
-                quantity: item.quantity,
-            };
-        })
-    );
 }
 
 /**
